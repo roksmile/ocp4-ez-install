@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/connected/*.sh)",
+      "Bash(truncate -s 0 /Users/rkim/Github/ocp4-ez-install/connected/01_download_ocp_tools.sh /Users/rkim/Github/ocp4-ez-install/connected/02_create_isc.sh /Users/rkim/Github/ocp4-ez-install/connected/03_mirror_images.sh)",
+      "Bash(bash -n /Users/rkim/Github/ocp4-ez-install/connected/02_create_isc.sh)",
+      "Bash(bash -n /Users/rkim/Github/ocp4-ez-install/connected/01_download_ocp_tools.sh)",
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/air-gapped/02_create_certs.sh)",
+      "Bash(bash -n /Users/rkim/Github/ocp4-ez-install/air-gapped/02_create_certs.sh)",
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/air-gapped/04_upload_mirror.sh)",
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/air-gapped/05_create_install_config.sh)",
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/air-gapped/06_create_agent_config.sh)",
+      "Bash(bash connected/07_create_cluster_manifests.sh)",
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/air-gaped/08_create_cluster_manifests.sh)",
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/air-gapped/09_create_agent_iso.sh)",
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/air-gapped/10_monitor_install.sh)",
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/add-nodes/01_create_nodes_config.sh)",
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/add-nodes/02_create_node_iso.sh)",
+      "Bash(chmod +x /Users/rkim/Github/ocp4-ez-install/air-gapped/03_create_registry.sh)",
+      "Bash(gh repo:*)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(git --version)",
+      "Read(//Users/rkim/.ssh/**)",
+      "Bash(git init:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git rm:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote:*)",
+      "Bash(git tag:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git checkout:*)"
+    ]
+  }
+}
