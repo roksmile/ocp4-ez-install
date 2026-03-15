@@ -1,0 +1,19 @@
+# 다운로드/미러링 결과물
+downloads/
+mirror/
+cache/
+logs/
+certs/
+
+# Pull Secret (민감 정보)
+pull-secret.txt
+pull-secret.json
+
+# 클러스터별 생성 파일
+*/ocp-isc.yaml
+*/olm-*.yaml
+
+# OS
+.DS_Store
+*.swp
+*.bak

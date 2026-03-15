@@ -1,0 +1,9 @@
+apiVersion: config.openshift.io/v1
+kind: ImageDigestMirrorSet
+metadata:
+  name: idms-olm-redhat
+spec:
+  imageDigestMirrors:
+  - mirrors:
+    - ocp-registry.kscada.kdneri.com:5000/olm-redhat
+    source: registry.redhat.io

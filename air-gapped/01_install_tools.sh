@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+# =============================================================================
+# 01_install_tools.sh - OCP4 CLI 도구 설치 (Air-Gap 환경)
+# =============================================================================
+# connected/01_download_ocp_tools.sh 로 다운로드한 파일을 이용하여
+# /usr/local/bin/ 에 설치합니다. (인터넷 연결 불필요)
+# =============================================================================
+
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# 명령어 출력 후 실행 헬퍼
+# -----------------------------------------------------------------------------
+run() {
+    echo "[CMD] $*"
+    "$@"
+}
+
+# -----------------------------------------------------------------------------
+# config.env 로드
+# -----------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/../config.env"
+
+if [[ ! -f "${CONFIG_FILE}" ]]; then
+    echo "[ERROR] config.env 파일을 찾을 수 없습니다: ${CONFIG_FILE}"
+    exit 1
+fi
+
+# shellcheck source=../config.env
+source "${CONFIG_FILE}"
+
+# -----------------------------------------------------------------------------
+# RHEL 9 체크
+# -----------------------------------------------------------------------------
+check_rhel9() {
+    if [[ ! -f /etc/redhat-release ]]; then
+        echo "[ERROR] RHEL 환경이 아닙니다. 이 스크립트는 RHEL 9에서 실행해야 합니다."
+        exit 1
+    fi
+
+    local os_version
+    os_version=$(grep -oP '(?<=release )\d+' /etc/redhat-release)
+    if [[ "${os_version}" != "9" ]]; then
+        echo "[ERROR] RHEL 9 가 필요합니다. 현재 버전: $(cat /etc/redhat-release)"
+        exit 1
+    fi
+
+    echo "[INFO] OS 확인: $(cat /etc/redhat-release)"
+}
+
+# -----------------------------------------------------------------------------
+# root 권한 체크
+# -----------------------------------------------------------------------------
+check_root() {
+    if [[ "${EUID}" -ne 0 ]]; then
+        echo "[ERROR] /usr/local/bin/ 에 설치하려면 root 권한이 필요합니다."
+        echo "        sudo 또는 root 로 실행하세요."
+        exit 1
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# 다운로드 디렉토리 확인
+# -----------------------------------------------------------------------------
+check_download_dir() {
+    if [[ ! -d "${DOWNLOAD_DIR}" ]]; then
+        echo "[ERROR] 다운로드 디렉토리가 존재하지 않습니다: ${DOWNLOAD_DIR}"
+        echo "        connected 환경에서 01_download_ocp_tools.sh 를 먼저 실행하세요."
+        exit 1
+    fi
+    echo "[INFO] 다운로드 디렉토리: ${DOWNLOAD_DIR}"
+}
+
+# -----------------------------------------------------------------------------
+# OCP 도구 설치 (tar.gz → 압축 해제 → /usr/local/bin/)
+# -----------------------------------------------------------------------------
+install_ocp_tools() {
+    echo ""
+    echo "================================================================="
+    echo " OCP ${OCP_VERSION} 도구 설치"
+    echo "================================================================="
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    trap "rm -rf '${tmp_dir}'" RETURN
+
+    for filename in "${OCP_TOOL_FILES[@]}"; do
+        local src="${DOWNLOAD_DIR}/${filename}"
+
+        if [[ ! -f "${src}" ]]; then
+            echo "[ERROR] 파일을 찾을 수 없습니다: ${src}"
+            echo "        connected 환경에서 01_download_ocp_tools.sh 를 먼저 실행하세요."
+            exit 1
+        fi
+
+        echo "[EXTR] ${filename} 압축 해제 중..."
+        run tar -xzf "${src}" -C "${tmp_dir}"
+    done
+
+    echo "[INST] /usr/local/bin/ 에 실행 파일 설치 중..."
+    find "${tmp_dir}" -maxdepth 1 -type f -executable | while read -r bin; do
+        local bin_name
+        bin_name=$(basename "${bin}")
+        run install -m 755 "${bin}" "/usr/local/bin/${bin_name}"
+        echo "[INST] /usr/local/bin/${bin_name}"
+    done
+}
+
+# -----------------------------------------------------------------------------
+# Butane 설치 (단일 바이너리, butane-amd64 → /usr/local/bin/butane)
+# -----------------------------------------------------------------------------
+install_butane() {
+    echo ""
+    echo "================================================================="
+    echo " Butane 설치"
+    echo "================================================================="
+
+    local src="${DOWNLOAD_DIR}/butane-amd64"
+
+    if [[ ! -f "${src}" ]]; then
+        echo "[ERROR] 파일을 찾을 수 없습니다: ${src}"
+        echo "        connected 환경에서 01_download_ocp_tools.sh 를 먼저 실행하세요."
+        exit 1
+    fi
+
+    run install -m 755 "${src}" /usr/local/bin/butane
+    echo "[INST] /usr/local/bin/butane"
+}
+
+# -----------------------------------------------------------------------------
+# Helm 설치 (tar.gz → linux-amd64/helm → /usr/local/bin/helm)
+# -----------------------------------------------------------------------------
+install_helm() {
+    echo ""
+    echo "================================================================="
+    echo " Helm ${HELM_VERSION} 설치"
+    echo "================================================================="
+
+    local filename="helm-linux-amd64.tar.gz"
+    local src="${DOWNLOAD_DIR}/${filename}"
+
+    if [[ ! -f "${src}" ]]; then
+        echo "[ERROR] 파일을 찾을 수 없습니다: ${src}"
+        echo "        connected 환경에서 01_download_ocp_tools.sh 를 먼저 실행하세요."
+        exit 1
+    fi
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    trap "rm -rf '${tmp_dir}'" RETURN
+
+    echo "[EXTR] ${filename} 압축 해제 중..."
+    run tar -xzf "${src}" -C "${tmp_dir}"
+
+    run install -m 755 "${tmp_dir}/helm-linux-amd64" /usr/local/bin/helm
+    echo "[INST] /usr/local/bin/helm"
+}
+
+# -----------------------------------------------------------------------------
+# 설치 결과 확인
+# -----------------------------------------------------------------------------
+verify_installation() {
+    echo ""
+    echo "================================================================="
+    echo " 설치 결과 확인"
+    echo "================================================================="
+
+    local tools=("oc" "kubectl" "oc-mirror" "openshift-install" "opm" "butane" "helm")
+    local all_ok=true
+
+    for tool in "${tools[@]}"; do
+        if command -v "${tool}" &>/dev/null; then
+            local ver
+            case "${tool}" in
+                butane)
+                    ver=$("${tool}" -V 2>/dev/null | head -1 || echo "(버전 확인 불가)") ;;
+                *)
+                    ver=$("${tool}" version --client 2>/dev/null | head -1 \
+                          || "${tool}" version 2>/dev/null | head -1 \
+                          || echo "(버전 확인 불가)") ;;
+            esac
+            printf "[OK]   %-20s %s\n" "${tool}" "${ver}"
+        else
+            printf "[MISS] %-20s 설치되지 않음\n" "${tool}"
+            all_ok=false
+        fi
+    done
+
+    echo ""
+    if [[ "${all_ok}" == true ]]; then
+        echo "[INFO] 모든 도구가 정상적으로 설치되었습니다."
+    else
+        echo "[WARN] 일부 도구가 설치되지 않았습니다. 위 로그를 확인하세요."
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# main
+# -----------------------------------------------------------------------------
+main() {
+    echo "================================================================="
+    echo " OCP4 CLI 도구 설치 스크립트 (Air-Gap)"
+    echo " OCP Version : ${OCP_VERSION}"
+    echo " Install Dir : /usr/local/bin/"
+    echo " Download Dir: ${DOWNLOAD_DIR}"
+    echo "================================================================="
+
+    check_rhel9
+    check_root
+    check_download_dir
+
+    install_ocp_tools
+    install_butane
+    install_helm
+
+    verify_installation
+
+    echo ""
+    echo "[DONE] 설치 완료."
+}
+
+main "$@"
