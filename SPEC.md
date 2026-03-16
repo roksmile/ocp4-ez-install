@@ -47,19 +47,12 @@ ocp4-ez-install/                        ← 프로젝트 루트 (BASE_DIR)
 ├── add-operators/                      ← 운영 중 Operator 추가 스크립트
 │   ├── 01_create_add_operators_isc.sh  ← 추가 Operator ISC 파일 생성
 │   └── 02_mirror_add_operators.sh      ← 추가 Operator 이미지 미러링
-└── {CLUSTER_NAME}/                     ← 02_create_isc.sh 가 자동 생성
+└── {CLUSTER_NAME}/                     ← 05~09 스크립트가 사용하는 클러스터 디렉토리
     ├── orig/                           ← 원본 설치 파일 보관
     │   ├── install-config.yaml
     │   ├── agent-config.yaml
     │   └── openshift/                  ← 클러스터 매니페스트 원본
-    ├── ocp/
-    │   └── ocp-isc.yaml
-    ├── olm-redhat/
-    │   └── olm-redhat-isc.yaml
-    ├── olm-certified/
-    │   └── olm-certified-isc.yaml
-    └── olm-community/
-        └── olm-community-isc.yaml
+    └── cluster-manifests/              ← 08_create_cluster_manifests.sh 가 생성
 ```
 
 ### 런타임 데이터 경로 (BASE_DIR 기준)
@@ -67,11 +60,17 @@ ocp4-ez-install/                        ← 프로젝트 루트 (BASE_DIR)
 ```
 {BASE_DIR}/
 ├── downloads/       ← 다운로드된 tar.gz 원본 파일
-├── mirror/          ← oc-mirror 결과물 (air-gap 환경으로 전송)
+├── mirror/          ← oc-mirror 결과물 (ISC 파일 + 미러링 데이터, air-gap 환경으로 전송)
 │   ├── ocp/
+│   │   └── ocp-isc.yaml
 │   ├── olm-redhat/
+│   │   └── olm-redhat-isc.yaml
 │   ├── olm-certified/
-│   └── olm-community/
+│   │   └── olm-certified-isc.yaml
+│   ├── olm-community/
+│   │   └── olm-community-isc.yaml
+│   └── add-images/
+│       └── add-images-isc.yaml
 ├── cache/           ← oc-mirror 캐시 (업로드 시 사용)
 │   └── {target}/
 ├── mirror-added/    ← add-operators 미러링 결과물
@@ -79,7 +78,7 @@ ocp4-ez-install/                        ← 프로젝트 루트 (BASE_DIR)
 │       ├── olm-redhat/
 │       ├── olm-certified/
 │       └── olm-community/
-├── add-operators-cache/  ← add-operators oc-mirror 캐시
+├── cache-added/     ← add-operators oc-mirror 캐시
 │   └── {YYYYMMDD-HHMMSS}/{target}/
 ├── certs/           ← 생성된 인증서
 │   └── {domain}/
@@ -274,7 +273,7 @@ ADD_OPERATORS=(
 )
 
 ADD_OPERATORS_MIRROR_DIR="${BASE_DIR}/mirror-added"
-ADD_OPERATORS_CACHE_DIR="${BASE_DIR}/add-operators-cache"
+ADD_OPERATORS_CACHE_DIR="${BASE_DIR}/cache-added"
 ```
 
 - 형식: `"operator-name:catalog"` (기존 OPERATORS 배열과 동일)
