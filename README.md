@@ -103,17 +103,7 @@ sudo bash connected/01_download_ocp_tools.sh
 bash connected/02_create_isc.sh
 ```
 
-인터랙티브 메뉴에서 미러링할 대상을 선택합니다.
-
-```
-[1] OCP Platform
-[2] RedHat OLM
-[3] Certified OLM
-[4] Community OLM
-[5] ALL (1+2+3+4)
-```
-
-OLM 선택 시 Operator 그룹을 추가로 선택합니다 (y/N):
+추가할 Operator 그룹을 선택합니다 (그룹별 y/n):
 
 | 그룹 | 포함 Operator |
 |------|-------------|
@@ -122,12 +112,15 @@ OLM 선택 시 Operator 그룹을 추가로 선택합니다 (y/N):
 | Virtualization | kubevirt-hyperconverged, local-storage-operator, mtc/mtv-operator, oadp, fence-agents |
 | CI/CD | openshift-gitops, rhbk, openshift-pipelines |
 
+선택 완료 후 OCP / Operator / Add-images ISC 파일이 모두 자동 생성됩니다.
+
 생성되는 ISC 파일 위치:
 ```
-{CLUSTER_NAME}/ocp/ocp-isc.yaml
-{CLUSTER_NAME}/olm-redhat/olm-redhat-isc.yaml
-{CLUSTER_NAME}/olm-certified/olm-certified-isc.yaml
-{CLUSTER_NAME}/olm-community/olm-community-isc.yaml
+mirror/ocp/ocp-isc.yaml
+mirror/olm-redhat/olm-redhat-isc.yaml       # 해당 카탈로그에 패키지가 있을 경우만 생성
+mirror/olm-certified/olm-certified-isc.yaml  # 해당 카탈로그에 패키지가 있을 경우만 생성
+mirror/olm-community/olm-community-isc.yaml  # 해당 카탈로그에 패키지가 있을 경우만 생성
+mirror/add-images/add-images-isc.yaml
 ```
 
 #### Step 3. 이미지 미러링
