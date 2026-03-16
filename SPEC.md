@@ -44,6 +44,9 @@ ocp4-ez-install/                        ← 프로젝트 루트 (BASE_DIR)
 ├── add-nodes/                          ← 워커 노드 추가 스크립트
 │   ├── 01_create_nodes_config.sh       ← nodes-config.yaml 생성
 │   └── 02_create_nodes_iso.sh          ← 노드 추가용 ISO 생성
+├── add-operators/                      ← 운영 중 Operator 추가 스크립트
+│   ├── 01_create_add_operators_isc.sh  ← 추가 Operator ISC 파일 생성
+│   └── 02_mirror_add_operators.sh      ← 추가 Operator 이미지 미러링
 └── {CLUSTER_NAME}/                     ← 02_create_isc.sh 가 자동 생성
     ├── orig/                           ← 원본 설치 파일 보관
     │   ├── install-config.yaml
@@ -71,6 +74,13 @@ ocp4-ez-install/                        ← 프로젝트 루트 (BASE_DIR)
 │   └── olm-community/
 ├── cache/           ← oc-mirror 캐시 (업로드 시 사용)
 │   └── {target}/
+├── mirror-added/    ← add-operators 미러링 결과물
+│   └── {YYYYMMDD-HHMMSS}/
+│       ├── olm-redhat/
+│       ├── olm-certified/
+│       └── olm-community/
+├── add-operators-cache/  ← add-operators oc-mirror 캐시
+│   └── {YYYYMMDD-HHMMSS}/{target}/
 ├── certs/           ← 생성된 인증서
 │   └── {domain}/
 │       ├── root_ca/         (ca.key, ca.crt)
@@ -252,6 +262,24 @@ CICD_OPERATORS=(
     "openshift-pipelines-operator-rh:redhat"
 )
 ```
+
+#### Add Operators
+
+운영 중인 클러스터에 추가할 Operator 목록과 결과물 저장 디렉토리.
+
+```bash
+ADD_OPERATORS=(
+    "elasticsearch-operator:redhat"
+    "amq-streams:redhat"
+)
+
+ADD_OPERATORS_MIRROR_DIR="${BASE_DIR}/mirror-added"
+ADD_OPERATORS_CACHE_DIR="${BASE_DIR}/add-operators-cache"
+```
+
+- 형식: `"operator-name:catalog"` (기존 OPERATORS 배열과 동일)
+- `ADD_OPERATORS_MIRROR_DIR`: 실행마다 타임스탬프 하위 디렉토리 자동 생성 (`YYYYMMDD-HHMMSS/`)
+- `ADD_OPERATORS_CACHE_DIR`: 캐시도 타임스탬프별로 분리
 
 #### 노드 정의
 
@@ -978,7 +1006,110 @@ ISO_DEST="${CLUSTER_DIR}/ocp-v${OCP_VERSION}-add-nodes.x86_64.iso"
 
 ---
 
-## 8. ISC YAML 포맷 명세
+## 8. Add-Operators 스크립트
+
+### 8-1. `add-operators/01_create_add_operators_isc.sh`
+
+**목적**: 운영 중인 OCP4 클러스터에 Operator를 추가 설치할 때 사용할 ISC 파일 생성
+**특징**: 실행마다 타임스탬프(`YYYYMMDD-HHMMSS`) 디렉토리를 새로 생성하므로 기존 결과물을 덮어쓰지 않음
+
+#### 전역 변수
+
+```bash
+RUN_ID=""    # date +%Y%m%d-%H%M%S 로 초기화
+RUN_DIR=""   # ADD_OPERATORS_MIRROR_DIR/RUN_ID
+RENDER_CACHE_DIR=""  # mktemp -d, EXIT 시 자동 삭제
+```
+
+#### 함수 목록
+
+| 함수 | 내용 |
+|------|------|
+| `check_add_operators()` | `ADD_OPERATORS` 배열이 비어있으면 `exit 1`, 목록 출력 |
+| `init_render_cache()` | `mktemp -d` 로 임시 디렉토리 생성, `trap EXIT` 으로 자동 삭제 |
+| `_render_catalog(catalog_url)` | `opm render {catalog} -o json` 으로 카탈로그 렌더링 (캐시 있으면 스킵) |
+| `get_default_channel(catalog_url, pkg)` | `jq` 로 `olm.package` 에서 `defaultChannel` 조회, 실패 시 `"stable"` 반환 |
+| `_write_isc(dir, file, catalog_url, catalog_type)` | 카탈로그 타입 일치 패키지를 `ADD_OPERATORS` 에서 필터링 후 ISC YAML 생성 |
+| `create_isc_files()` | redhat/certified/community 3개 카탈로그에 대해 `_write_isc` 호출 |
+
+#### 생성되는 ISC 파일
+
+```
+{ADD_OPERATORS_MIRROR_DIR}/{YYYYMMDD-HHMMSS}/
+├── olm-redhat/add-redhat-isc.yaml
+├── olm-certified/add-certified-isc.yaml
+└── olm-community/add-community-isc.yaml
+```
+
+해당 카탈로그에 포함할 패키지가 없으면 해당 디렉토리/파일은 생성하지 않음.
+
+#### main() 실행 순서
+
+```
+RUN_ID/RUN_DIR 초기화
+→ jq/opm 설치 확인 (미설치 시 warn, stable 로 대체)
+→ check_add_operators
+→ init_render_cache
+→ create_isc_files
+→ 완료 출력 (RUN_ID, 다음 단계 명령어 안내)
+```
+
+---
+
+### 8-2. `add-operators/02_mirror_add_operators.sh`
+
+**목적**: `01_create_add_operators_isc.sh` 로 생성한 ISC 파일을 사용하여 이미지 다운로드
+
+**사용법**:
+```bash
+./02_mirror_add_operators.sh              # 기존 RUN_ID 목록에서 선택
+./02_mirror_add_operators.sh YYYYMMDD-HHMMSS  # RUN_ID 직접 지정
+```
+
+#### ISC 매핑
+
+```bash
+declare -A ISC_FILES=(
+    ["olm-redhat"]="add-redhat-isc.yaml"
+    ["olm-certified"]="add-certified-isc.yaml"
+    ["olm-community"]="add-community-isc.yaml"
+)
+ISC_ORDER=("olm-redhat" "olm-certified" "olm-community")
+```
+
+#### 함수 목록
+
+| 함수 | 내용 |
+|------|------|
+| `check_prerequisites()` | `PULL_SECRET_FILE` 존재, `oc-mirror` PATH 확인 |
+| `select_run(arg_run_id)` | CLI 인자 있으면 직접 사용, 없으면 `ADD_OPERATORS_MIRROR_DIR` 하위 타임스탬프 디렉토리 목록을 최신순으로 표시 후 선택 |
+| `select_target()` | `RUN_DIR` 내 존재하는 ISC 파일 목록만 표시, 카탈로그 개별 또는 all 선택 |
+| `run_mirror(target)` | `oc-mirror --v2 --config --cache-dir --authfile file://{isc_dir}` 실행 |
+
+#### `run_mirror` 상세
+
+```bash
+oc-mirror \
+    --v2 \
+    --config "${RUN_DIR}/${target}/${ISC_FILES[target]}" \
+    --cache-dir "${ADD_OPERATORS_CACHE_DIR}/${RUN_ID}/${target}" \
+    --authfile "${PULL_SECRET_FILE}" \
+    "file://${RUN_DIR}/${target}"
+```
+
+#### main() 실행 순서
+
+```
+check_prerequisites
+→ select_run (CLI 인자 또는 목록 선택)
+→ select_target (RUN_DIR 내 존재하는 카탈로그 선택)
+→ run_mirror (단일 or 전체 순서대로)
+→ 성공/실패 집계 출력 (RUN_ID 포함)
+```
+
+---
+
+## 9. ISC YAML 포맷 명세
 
 **API 버전**: `mirror.openshift.io/v2alpha1` (oc-mirror v2, OCP 4.14+ 권장)
 
@@ -1017,7 +1148,7 @@ mirror:
 
 ---
 
-## 9. Operator 카탈로그 매핑
+## 10. Operator 카탈로그 매핑
 
 | Operator | Catalog | 그룹 |
 |----------|---------|------|
@@ -1047,7 +1178,7 @@ mirror:
 
 ---
 
-## 10. 다운로드 파일 목록
+## 11. 다운로드 파일 목록
 
 | 파일 | URL | 설치 경로 |
 |------|-----|-----------|
@@ -1060,7 +1191,7 @@ mirror:
 
 ---
 
-## 11. 전체 실행 흐름
+## 12. 전체 실행 흐름
 
 ```
 [사전 준비]
@@ -1138,11 +1269,33 @@ mirror:
   bash add-nodes/02_create_nodes_iso.sh
        → oc login 후 pull-secret 추출
        → oc adm node-image create → ocp-v{OCP_VERSION}-add-nodes.x86_64.iso
+
+[Operator 추가 (선택)]
+  # config.env 의 ADD_OPERATORS 배열에 추가할 Operator 목록 설정 후 실행
+
+  # [Connected 환경] ISC 파일 생성
+  bash add-operators/01_create_add_operators_isc.sh
+       → ADD_OPERATORS 카탈로그별 분류
+       → mirror-added/{YYYYMMDD-HHMMSS}/olm-*/add-*-isc.yaml 생성
+       → 완료 시 RUN_ID 출력
+
+  # [Connected 환경] 이미지 미러링
+  bash add-operators/02_mirror_add_operators.sh [RUN_ID]
+       → RUN_ID 선택 또는 직접 지정
+       → 카탈로그 선택 (개별 or all)
+       → oc-mirror --v2 실행
+       → mirror-added/{RUN_ID}/{target}/ 에 저장
+
+  # [데이터 전송] air-gap 환경으로 전송
+  rsync -avzP ./mirror-added/ user@air-gap-server:/path/to/mirror-added/
+
+  # [Air-Gapped 환경] Registry 업로드
+  # 04_upload_mirror.sh 방식으로 mirror-added/{RUN_ID}/ 의 이미지를 Registry 에 업로드
 ```
 
 ---
 
-## 12. 에러 처리 공통 원칙
+## 13. 에러 처리 공통 원칙
 
 | 상황 | 처리 방식 |
 |------|----------|

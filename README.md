@@ -39,9 +39,12 @@ ocp4-ez-install/
 │   ├── 08_create_cluster_manifests.sh  # cluster-manifests 생성
 │   ├── 09_create_agent_iso.sh          # Agent ISO 생성
 │   └── 10_monitor_install.sh           # 설치 진행 모니터링
-└── add-nodes/                          # 워커 노드 추가 스크립트
-    ├── 01_create_nodes_config.sh       # nodes-config.yaml 생성
-    └── 02_create_nodes_iso.sh          # 노드 추가용 ISO 생성
+├── add-nodes/                          # 워커 노드 추가 스크립트
+│   ├── 01_create_nodes_config.sh       # nodes-config.yaml 생성
+│   └── 02_create_nodes_iso.sh          # 노드 추가용 ISO 생성
+└── add-operators/                      # 운영 중 Operator 추가 스크립트
+    ├── 01_create_add_operators_isc.sh  # 추가 Operator ISC 파일 생성
+    └── 02_mirror_add_operators.sh      # 추가 Operator 이미지 미러링
 ```
 
 ---
@@ -70,6 +73,7 @@ vi config.env
 | `GATEWAY` | 기본 게이트웨이 |
 | `DNS_SERVERS` | DNS 서버 목록 |
 | `SSH_PUB_KEY` | 노드 접속용 SSH 공개 키 배열 |
+| `ADD_OPERATORS` | 운영 중 클러스터에 추가할 Operator 목록 (`operator-name:catalog`) |
 
 ### 2. Pull Secret 저장
 
@@ -278,6 +282,62 @@ bash add-nodes/02_create_nodes_iso.sh
 ```
 
 생성된 `ocp-v{OCP_VERSION}-add-nodes.x86_64.iso` 를 추가할 노드에 부팅합니다.
+
+---
+
+### [Operator 추가 - 선택사항]
+
+설치 완료 후 운영 중인 클러스터에 Operator를 추가할 때 사용합니다.
+
+#### Step 1. config.env 설정
+
+```bash
+ADD_OPERATORS=(
+    "elasticsearch-operator:redhat"
+    "amq-streams:redhat"
+)
+```
+
+형식: `"operator-name:catalog"` (`catalog`: `redhat` | `certified` | `community`)
+
+#### Step 2. ISC 파일 생성 (Connected 환경)
+
+```bash
+bash add-operators/01_create_add_operators_isc.sh
+```
+
+실행마다 타임스탬프 디렉토리(`mirror-added/YYYYMMDD-HHMMSS/`)를 새로 생성합니다.
+
+```
+mirror-added/
+└── 20260316-143022/
+    ├── olm-redhat/add-redhat-isc.yaml
+    └── olm-certified/add-certified-isc.yaml
+```
+
+완료 시 `RUN_ID`와 다음 단계 명령어가 출력됩니다.
+
+#### Step 3. 이미지 미러링 (Connected 환경)
+
+```bash
+# RUN_ID 직접 지정
+bash add-operators/02_mirror_add_operators.sh 20260316-143022
+
+# 또는 목록에서 선택
+bash add-operators/02_mirror_add_operators.sh
+```
+
+카탈로그별 개별 선택 또는 전체 미러링이 가능합니다.
+
+#### Step 4. Air-gap 환경으로 전송 및 업로드
+
+```bash
+# Connected → Air-gap 전송
+rsync -avzP ./mirror-added/ user@air-gap-server:/path/to/mirror-added/
+
+# Air-gap 환경에서 Registry 업로드
+# mirror-added/{RUN_ID}/ 의 이미지를 04_upload_mirror.sh 방식으로 업로드
+```
 
 ---
 
