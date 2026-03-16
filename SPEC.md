@@ -108,18 +108,8 @@ source "${CONFIG_FILE}"
 
 ### 3-2. 헬퍼 함수 패턴
 
-스크립트별로 필요에 따라 아래 두 패턴 중 하나 사용:
+모든 스크립트에서 단순 출력 패턴 사용:
 
-**색상 출력 패턴** (02_create_certs.sh 등):
-```bash
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'
-BOLD='\033[1m'; NC='\033[0m'
-info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
-```
-
-**단순 출력 패턴** (01_install_tools.sh, 03_create_registry.sh 등):
 ```bash
 info()  { echo "[INFO] $*"; }
 warn()  { echo "[WARN] $*"; }
