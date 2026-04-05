@@ -6,12 +6,14 @@
 # config.env 의 ADD_OPERATORS 목록을 카탈로그별로 분류하여
 # ImageSetConfiguration 파일을 생성합니다.
 #
-# 실행마다 타임스탬프 디렉토리를 새로 생성하므로 덮어쓰지 않습니다.
+# 실행마다 RUN_ID(YYYYMMDD + 순번 01~99) 디렉토리를 새로 생성하므로 덮어쓰지 않습니다.
+# 같은 날짜에 재실행 시 기존 디렉토리의 최대 순번 + 1 을 사용합니다 (예: 2026032001 → 2026032002).
 #
 # 생성 위치:
-#   ${ADD_OPERATORS_MIRROR_DIR}/YYYYMMDD-HHMMSS/olm-redhat/add-redhat-isc.yaml
-#   ${ADD_OPERATORS_MIRROR_DIR}/YYYYMMDD-HHMMSS/olm-certified/add-certified-isc.yaml
-#   ${ADD_OPERATORS_MIRROR_DIR}/YYYYMMDD-HHMMSS/olm-community/add-community-isc.yaml
+#   ${ADD_OPERATORS_MIRROR_DIR}/YYYYMMDDNN/olm-redhat/add-redhat-isc.yaml
+#   ${ADD_OPERATORS_MIRROR_DIR}/YYYYMMDDNN/olm-certified/add-certified-isc.yaml
+#   ${ADD_OPERATORS_MIRROR_DIR}/YYYYMMDDNN/olm-community/add-community-isc.yaml
+#   (NN: 당일 실행 순번 01~99)
 # =============================================================================
 
 set -uo pipefail
@@ -174,11 +176,45 @@ create_isc_files() {
 }
 
 # =============================================================================
+# RUN_ID 할당: YYYYMMDD + 순번(01~99)
+# =============================================================================
+allocate_run_id() {
+    local date_part seq next max_seq=0 name d
+
+    date_part="$(date +%Y%m%d)"
+
+    if [[ -z "${ADD_OPERATORS_MIRROR_DIR:-}" ]]; then
+        echo "[ERROR] ADD_OPERATORS_MIRROR_DIR 가 설정되어 있지 않습니다 (config.env 확인)."
+        exit 1
+    fi
+
+    mkdir -p "${ADD_OPERATORS_MIRROR_DIR}"
+
+    while IFS= read -r d; do
+        [[ -n "${d}" ]] || continue
+        name="$(basename "${d}")"
+        if [[ "${name}" =~ ^${date_part}([0-9]{2})$ ]]; then
+            seq="${BASH_REMATCH[1]}"
+            if (( 10#${seq} > max_seq )); then
+                max_seq=$((10#${seq}))
+            fi
+        fi
+    done < <(find "${ADD_OPERATORS_MIRROR_DIR}" -maxdepth 1 -mindepth 1 -type d 2>/dev/null)
+
+    next=$((max_seq + 1))
+    if (( next > 99 )); then
+        echo "[ERROR] ${date_part} 일자 RUN_ID 순번이 99를 초과했습니다."
+        exit 1
+    fi
+
+    RUN_ID="${date_part}$(printf '%02d' "${next}")"
+}
+
+# =============================================================================
 # main
 # =============================================================================
 main() {
-    # 타임스탬프 기반 실행 디렉토리 결정
-    RUN_ID="$(date +%Y%m%d-%H%M%S)"
+    allocate_run_id
     RUN_DIR="${ADD_OPERATORS_MIRROR_DIR}/${RUN_ID}"
 
     echo ""

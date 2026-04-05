@@ -7,7 +7,7 @@
 #
 # 사용법:
 #   ./03_upload_add_operators.sh              # 기존 실행 목록에서 선택
-#   ./03_upload_add_operators.sh YYYYMMDD-HHMMSS  # RUN_ID 직접 지정
+#   ./03_upload_add_operators.sh YYYYMMDDNN  # RUN_ID 직접 지정 (예: 2026032001)
 #
 # 업로드 목적지:
 #   docker://<MIRROR_REGISTRY>/mirror_registry/<RUN_ID>/olm-redhat
@@ -178,14 +178,19 @@ select_run() {
         return
     fi
 
-    # 타임스탬프 형식(YYYYMMDD-HHMMSS) 디렉토리 목록 수집 (최신순)
+    # RUN_ID 디렉토리: YYYYMMDDNN(10자리) 또는 기존 YYYYMMDD-HHMMSS (호환)
     local -a runs=()
+    local name
     if [[ -d "${ADD_OPERATORS_MIRROR_DIR}" ]]; then
         while IFS= read -r -d '' d; do
-            runs+=("$(basename "${d}")")
-        done < <(find "${ADD_OPERATORS_MIRROR_DIR}" -maxdepth 1 -mindepth 1 -type d \
-                      -name '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]' \
-                      -print0 | sort -rz)
+            name="$(basename "${d}")"
+            if [[ "${name}" =~ ^[0-9]{10}$ ]] || [[ "${name}" =~ ^[0-9]{8}-[0-9]{6}$ ]]; then
+                runs+=("${name}")
+            fi
+        done < <(find "${ADD_OPERATORS_MIRROR_DIR}" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+        if [[ ${#runs[@]} -gt 0 ]]; then
+            readarray -t runs < <(printf '%s\n' "${runs[@]}" | sort -r)
+        fi
     fi
 
     if [[ ${#runs[@]} -eq 0 ]]; then

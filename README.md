@@ -299,11 +299,11 @@ ADD_OPERATORS=(
 bash add-operators/01_create_add_operators_isc.sh
 ```
 
-실행마다 타임스탬프 디렉토리(`mirror-added/YYYYMMDD-HHMMSS/`)를 새로 생성합니다.
+실행마다 `RUN_ID` 디렉토리(`mirror-added/YYYYMMDDNN/`)를 새로 생성합니다. `NN`은 당일 실행 순번(01~99)이며, 같은 날 재실행 시 자동으로 증가합니다.
 
 ```
 mirror-added/
-└── 20260316-143022/
+└── 2026032001/
     ├── olm-redhat/add-redhat-isc.yaml
     └── olm-certified/add-certified-isc.yaml
 ```
@@ -314,7 +314,7 @@ mirror-added/
 
 ```bash
 # RUN_ID 직접 지정
-bash add-operators/02_mirror_add_operators.sh 20260316-143022
+bash add-operators/02_mirror_add_operators.sh 2026032001
 
 # 또는 목록에서 선택
 bash add-operators/02_mirror_add_operators.sh

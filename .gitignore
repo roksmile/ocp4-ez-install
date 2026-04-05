@@ -13,6 +13,9 @@ pull-secret.json
 */ocp-isc.yaml
 */olm-*.yaml
 
+# Python
+.venv/
+
 # OS
 .DS_Store
 *.swp
