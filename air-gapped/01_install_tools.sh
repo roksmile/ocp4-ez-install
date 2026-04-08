@@ -98,12 +98,20 @@ install_ocp_tools() {
         run tar -xzf "${src}" -C "${tmp_dir}"
     done
 
+    # Red Hat tarball 은 바이너리가 tmp 직하위가 아니라 하위 디렉터리에 둘 수 있음
+    # (예: oc-mirror.rhel9.tar.gz → oc-mirror/oc-mirror). 이름으로 재귀 탐색 후 설치.
     echo "[INST] /usr/local/bin/ 에 실행 파일 설치 중..."
-    find "${tmp_dir}" -maxdepth 1 -type f -executable | while read -r bin; do
-        local bin_name
-        bin_name=$(basename "${bin}")
-        run install -m 755 "${bin}" "/usr/local/bin/${bin_name}"
-        echo "[INST] /usr/local/bin/${bin_name}"
+    local -a cli_names=(oc kubectl oc-mirror openshift-install opm)
+    local name bin_path
+    for name in "${cli_names[@]}"; do
+        bin_path=$(find "${tmp_dir}" -type f -name "${name}" 2>/dev/null | head -1 || true)
+        if [[ -z "${bin_path}" || ! -f "${bin_path}" ]]; then
+            echo "[WARN] ${name} 바이너리를 압축 해제 결과에서 찾지 못했습니다."
+            continue
+        fi
+        [[ -x "${bin_path}" ]] || chmod +x "${bin_path}"
+        run install -m 755 "${bin_path}" "/usr/local/bin/${name}"
+        echo "[INST] /usr/local/bin/${name}"
     done
 }
 

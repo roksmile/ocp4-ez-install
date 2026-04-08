@@ -146,6 +146,7 @@ mirror:
     - name: ${OCP_CHANNEL}
       minVersion: ${OCP_VERSION}
       maxVersion: ${OCP_VERSION}
+    graph: true
 EOF
 
     echo "[OK]   OCP ISC 파일 생성: ${isc_file}"

@@ -156,7 +156,13 @@ run_upload() {
     local isc_dir="${MIRROR_DIR}/${target}"
     local isc_file="${isc_dir}/${ISC_FILES[${target}]}"
     local cache_dir="${CACHE_DIR}/${target}"
-    local dest_registry="docker://${MIRROR_REGISTRY}/${target}"
+    local dest_registry
+    # add-images 는 ISC에 정의된 경로 그대로 레지스트리 루트(host:port)에 푸시
+    if [[ "${target}" == "add-images" ]]; then
+        dest_registry="docker://${MIRROR_REGISTRY}"
+    else
+        dest_registry="docker://${MIRROR_REGISTRY}/${target}"
+    fi
 
     echo ""
     echo "================================================================="
@@ -214,7 +220,7 @@ select_target() {
     echo "  2) olm-redhat    - Red Hat Operator 이미지" >&2
     echo "  3) olm-certified - Certified Operator 이미지" >&2
     echo "  4) olm-community - Community Operator 이미지" >&2
-    echo "  5) add-images    - 추가 이미지 (ADDITIONAL_IMAGES)" >&2
+    echo "  5) add-images    - 추가 이미지 (ADDITIONAL_IMAGES, Registry 루트로 업로드)" >&2
     echo "  6) all           - 전체 업로드 (존재하는 미러링 디렉토리 모두)" >&2
     echo "" >&2
     echo -n "  선택 (1-6): " >&2
