@@ -32,7 +32,7 @@ source "${CONFIG_FILE}"
 # -----------------------------------------------------------------------------
 ORIG_NODES_CONFIG="${CLUSTER_DIR}/orig/nodes-config.yaml"
 DEST_NODES_CONFIG="${CLUSTER_DIR}/nodes-config.yaml"
-PULL_SECRET_FILE="${CLUSTER_DIR}/cluster-pull-secret.txt"
+PULL_SECRET_FILE="${BASE_DIR}/pull-secret.txt"
 ISO_SRC="${CLUSTER_DIR}/node.x86_64.iso"
 ISO_NAME="ocp-v${OCP_VERSION}-add-nodes.x86_64.iso"
 ISO_DEST="${CLUSTER_DIR}/${ISO_NAME}"

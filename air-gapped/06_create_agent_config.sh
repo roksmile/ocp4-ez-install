@@ -6,7 +6,7 @@
 # agent-config.yaml 을 생성합니다.
 #
 # 참조:
-#   config.env        - NODES, MACHINE_NETWORK, GATEWAY, DNS_SERVERS
+#   config.env        - NODES, MACHINE_NETWORK, GATEWAY, DNS_SERVERS, NTP_SERVERS
 #   05_create_install_config.sh 와 동일한 NODES 형식 사용
 #
 # 출력 파일: ${BASE_DIR}/${CLUSTER_NAME}/orig/agent-config.yaml
@@ -27,6 +27,11 @@ fi
 
 # shellcheck source=../config.env
 source "${CONFIG_FILE}"
+
+# NTP_SERVERS 미정의 config.env 호환
+if ! declare -p NTP_SERVERS &>/dev/null; then
+    declare -ga NTP_SERVERS=()
+fi
 
 # -----------------------------------------------------------------------------
 # 노드 파싱
@@ -74,6 +79,24 @@ get_rendezvous_ip() {
     local role hostname ip nic mac
     IFS='|' read -r role hostname ip nic mac <<< "${first_master}"
     echo "${ip}"
+}
+
+# -----------------------------------------------------------------------------
+# NTP_SERVERS → additionalNTPSources (비어 있으면 YAML 에 넣지 않음)
+# -----------------------------------------------------------------------------
+append_additional_ntp_sources() {
+    local -a servers=()
+    local s
+    for s in "${NTP_SERVERS[@]}"; do
+        [[ -z "${s// }" ]] && continue
+        servers+=("${s}")
+    done
+    [[ ${#servers[@]} -eq 0 ]] && return 0
+
+    printf '%s\n' "additionalNTPSources:" >> "${OUTPUT_FILE}"
+    for s in "${servers[@]}"; do
+        printf '  - %s\n' "${s}" >> "${OUTPUT_FILE}"
+    done
 }
 
 # -----------------------------------------------------------------------------
@@ -150,8 +173,11 @@ kind: AgentConfig
 metadata:
   name: ${CLUSTER_NAME}
 rendezvousIP: ${rendezvous_ip}
-hosts:
 EOF
+
+    append_additional_ntp_sources
+
+    printf '%s\n' "hosts:" >> "${OUTPUT_FILE}"
 
     # master 노드
     for entry in "${MASTER_NODES[@]}"; do
@@ -201,6 +227,19 @@ print_summary() {
     printf " DNS Servers     :"
     for dns in "${DNS_SERVERS[@]}"; do printf " %s" "${dns}"; done
     echo ""
+    printf " NTP Servers     :"
+    if [[ ${#NTP_SERVERS[@]} -eq 0 ]]; then
+        echo " (없음 — additionalNTPSources 생략)"
+    else
+        local shown=false
+        for s in "${NTP_SERVERS[@]}"; do
+            [[ -z "${s// }" ]] && continue
+            printf " %s" "${s}"
+            shown=true
+        done
+        [[ "${shown}" == false ]] && printf " (없음 — additionalNTPSources 생략)"
+        echo ""
+    fi
     echo "================================================================="
 }
 

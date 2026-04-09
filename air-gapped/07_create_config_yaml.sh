@@ -79,7 +79,7 @@ metadata:
   name: cs-redhat-operator-index
   namespace: openshift-marketplace
 spec:
-  image: ${MIRROR_REGISTRY}/olm-redhat/redhat/redhat-operator-index:v${OCP_MAJOR_VERSION}
+  image: ${MIRROR_REGISTRY}/redhat/redhat-operator-index:v${OCP_MAJOR_VERSION}
   sourceType: grpc
   updateStrategy:
     registryPoll:
@@ -96,7 +96,7 @@ metadata:
 spec:
   imageDigestMirrors:
   - mirrors:
-    - ${MIRROR_REGISTRY}/olm-redhat
+    - ${MIRROR_REGISTRY}
     source: registry.redhat.io"
 
 # -----------------------------------------------------------------------------

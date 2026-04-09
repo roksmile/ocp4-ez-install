@@ -4,6 +4,9 @@
 # =============================================================================
 # config.env 의 NODES 배열을 파싱하여 master/worker 수를 확인하고,
 # agent-based install 방식에 필요한 install-config.yaml 을 생성합니다.
+# NTP 는 OpenShift Agent 설치에서 install-config(platform: none)에 넣을 수 없으며
+# 06_create_agent_config.sh 가 생성하는 agent-config.yaml 의 additionalNTPSources
+# (config.env 의 NTP_SERVERS)를 사용합니다.
 #
 # 출력 파일: ${BASE_DIR}/${CLUSTER_NAME}/orig/install-config.yaml
 # =============================================================================
@@ -160,9 +163,10 @@ prepare_output_dir() {
 # install-config.yaml 생성
 # -----------------------------------------------------------------------------
 generate_install_config() {
-    local release_source="quay.io/openshift-release-dev/ocp-release"
+    local art_mirror="${MIRROR_REGISTRY}/openshift/release"
     local art_source="quay.io/openshift-release-dev/ocp-v4.0-art-dev"
-    local release_mirror="${MIRROR_REGISTRY}/ocp/openshift/release"
+    local release_mirror="${MIRROR_REGISTRY}/openshift/release-images"
+    local release_source="quay.io/openshift-release-dev/ocp-release"
 
     # ── 기본 섹션 ──────────────────────────────────────────────────────────
     cat > "${OUTPUT_FILE}" <<EOF
@@ -218,11 +222,11 @@ EOF
     cat >> "${OUTPUT_FILE}" <<EOF
 imageDigestSources:
 - mirrors:
-  - ${release_mirror}
-  source: ${release_source}
+  - ${art_mirror}
+  source: ${art_source}
 - mirrors:
   - ${release_mirror}
-  source: ${art_source}
+  source: ${release_source}
 EOF
 }
 

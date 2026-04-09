@@ -121,7 +121,7 @@ run_mirror() {
         --config "${isc_file}" \
         --cache-dir "${cache_dir}" \
         --authfile "${PULL_SECRET_FILE}" \
-        --workspace "file://${isc_dir}"
+        "file://${isc_dir}"
 
     local rc=$?
     if [[ ${rc} -eq 0 ]]; then
