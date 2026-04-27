@@ -6,8 +6,8 @@
 # 내부 Registry 로 업로드합니다.
 #
 # 사용법:
-#   ./03_upload_add_operators.sh              # 기존 실행 목록에서 선택
-#   ./03_upload_add_operators.sh YYYYMMDDNN  # RUN_ID 직접 지정 (예: 2026032001)
+#   ./03_upload_add_operators.sh                 # mirror-added/ 하위 디렉토리 목록에서 선택
+#   ./03_upload_add_operators.sh <ADD_OPERATORS_TARGET>  # 해당 이름의 미러 결과 디렉토리
 #
 # 업로드 목적지:
 #   docker://<MIRROR_REGISTRY>/mirror_registry/<RUN_ID>/olm-redhat
@@ -178,15 +178,13 @@ select_run() {
         return
     fi
 
-    # RUN_ID 디렉토리: YYYYMMDDNN(10자리) 또는 기존 YYYYMMDD-HHMMSS (호환)
+    # 실행 디렉토리: ADD_OPERATORS_TARGET 이름 등, mirror-added/ 바로 아래의 모든 하위 디렉터리
     local -a runs=()
     local name
     if [[ -d "${ADD_OPERATORS_MIRROR_DIR}" ]]; then
         while IFS= read -r -d '' d; do
             name="$(basename "${d}")"
-            if [[ "${name}" =~ ^[0-9]{10}$ ]] || [[ "${name}" =~ ^[0-9]{8}-[0-9]{6}$ ]]; then
-                runs+=("${name}")
-            fi
+            runs+=("${name}")
         done < <(find "${ADD_OPERATORS_MIRROR_DIR}" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
         if [[ ${#runs[@]} -gt 0 ]]; then
             readarray -t runs < <(printf '%s\n' "${runs[@]}" | sort -r)
