@@ -3,16 +3,16 @@
 # 01_create_add_operators_isc.sh - 추가 Operator ISC 파일 생성
 # =============================================================================
 # 운영 중인 OCP4 클러스터에 Operator 를 추가 설치할 때 사용합니다.
-# config.env 의 ADD_OPERATORS 목록을 카탈로그별로 분류하여
+# config.env 의 ADD_OPERATORS_LIST 목록을 카탈로그별로 분류하여
 # ImageSetConfiguration 파일을 생성합니다.
 #
-# 출력 디렉토리는 config.env 의 ADD_OPERATORS_TARGET 을 사용합니다
-# (같은 대상으로 재실행 시 ISC 가 덮어씌워질 수 있으니 주의하세요).
+# 출력 루트는 ${ADD_OPERATORS_MIRROR_DIR}/${ADD_OPERATORS_TARGET} 입니다.
+# 같은 ADD_OPERATORS_TARGET 으로 재실행 시 ISC 가 덮어씌워질 수 있으니 주의하세요.
 #
 # 생성 위치:
-#   ${ADD_OPERATORS_MIRROR_DIR}/<ADD_OPERATORS_TARGET>/olm-redhat/add-redhat-isc.yaml
-#   ${ADD_OPERATORS_MIRROR_DIR}/<ADD_OPERATORS_TARGET>/olm-certified/add-certified-isc.yaml
-#   ${ADD_OPERATORS_MIRROR_DIR}/<ADD_OPERATORS_TARGET>/olm-community/add-community-isc.yaml
+#   ${ADD_OPERATORS_MIRROR_DIR}/${ADD_OPERATORS_TARGET}/olm-redhat/add-redhat-isc.yaml
+#   ${ADD_OPERATORS_MIRROR_DIR}/${ADD_OPERATORS_TARGET}/olm-certified/add-certified-isc.yaml
+#   ${ADD_OPERATORS_MIRROR_DIR}/${ADD_OPERATORS_TARGET}/olm-community/add-community-isc.yaml
 # =============================================================================
 
 set -uo pipefail
@@ -101,17 +101,17 @@ get_default_channel() {
 }
 
 # =============================================================================
-# ADD_OPERATORS 검증
+# ADD_OPERATORS_LIST 검증
 # =============================================================================
 check_add_operators() {
-    if [[ ${#ADD_OPERATORS[@]} -eq 0 ]]; then
-        echo "[ERROR] config.env 의 ADD_OPERATORS 가 비어 있습니다."
-        echo "        추가할 Operator 를 ADD_OPERATORS 배열에 정의하세요."
+    if [[ ${#ADD_OPERATORS_LIST[@]} -eq 0 ]]; then
+        echo "[ERROR] config.env 의 ADD_OPERATORS_LIST 가 비어 있습니다."
+        echo "        추가할 Operator 를 ADD_OPERATORS_LIST 배열에 정의하세요."
         exit 1
     fi
 
-    echo "[INFO] 추가할 Operator 목록 (${#ADD_OPERATORS[@]}개):"
-    for op in "${ADD_OPERATORS[@]}"; do
+    echo "[INFO] 추가할 Operator 목록 (${#ADD_OPERATORS_LIST[@]}개):"
+    for op in "${ADD_OPERATORS_LIST[@]}"; do
         echo "       - ${op%%:*} [${op##*:}-operator-index]"
     done
 }
@@ -127,7 +127,7 @@ _write_isc() {
 
     local -a packages=()
 
-    for op in "${ADD_OPERATORS[@]}"; do
+    for op in "${ADD_OPERATORS_LIST[@]}"; do
         [[ "${op##*:}" == "${catalog_type}" ]] && packages+=("${op%%:*}")
     done
 
@@ -209,7 +209,7 @@ main() {
         echo "[WARN] opm 이 설치되어 있지 않습니다. defaultChannel 조회를 건너뛰고 'stable' 로 대체합니다."
     fi
 
-    # ADD_OPERATORS 검증 및 출력
+    # ADD_OPERATORS_LIST 검증 및 출력
     check_add_operators
 
     # opm render 캐시 초기화

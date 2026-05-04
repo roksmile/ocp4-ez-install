@@ -6,13 +6,13 @@
 # 내부 Registry 로 업로드합니다.
 #
 # 사용법:
-#   ./03_upload_add_operators.sh                 # mirror-added/ 하위 디렉토리 목록에서 선택
-#   ./03_upload_add_operators.sh <ADD_OPERATORS_TARGET>  # 해당 이름의 미러 결과 디렉토리
+#   ./03_upload_add_operators.sh                 # ADD_OPERATORS_MIRROR_DIR 직하위 디렉터리 목록에서 선택
+#   ./03_upload_add_operators.sh <name>         # 보통 config.env 의 ADD_OPERATORS_TARGET 과 동일한 이름
 #
-# 업로드 목적지:
-#   docker://<MIRROR_REGISTRY>/mirror_registry/<RUN_ID>/olm-redhat
-#   docker://<MIRROR_REGISTRY>/mirror_registry/<RUN_ID>/olm-certified
-#   docker://<MIRROR_REGISTRY>/mirror_registry/<RUN_ID>/olm-community
+# 업로드 목적지 (oc-mirror --dest):
+#   docker://<MIRROR_REGISTRY>/<MIRROR_TARGET>/olm-redhat
+#   docker://<MIRROR_REGISTRY>/<MIRROR_TARGET>/olm-certified
+#   docker://<MIRROR_REGISTRY>/<MIRROR_TARGET>/olm-community
 # =============================================================================
 
 set -uo pipefail
@@ -50,8 +50,10 @@ declare -A ISC_FILES=(
 
 ISC_ORDER=("olm-redhat" "olm-certified" "olm-community")
 
-# 선택된 실행 디렉토리 (select_run 에서 설정)
-RUN_ID=""
+# 미러 결과 루트 (select_mirror_target 에서 설정)
+#   MIRROR_TARGET : ADD_OPERATORS_MIRROR_DIR 직하위 이름 (보통 ADD_OPERATORS_TARGET)
+#   RUN_DIR       : ${ADD_OPERATORS_MIRROR_DIR}/${MIRROR_TARGET}
+MIRROR_TARGET=""
 RUN_DIR=""
 
 # =============================================================================
@@ -160,51 +162,51 @@ check_prerequisites() {
 }
 
 # =============================================================================
-# 실행 디렉토리(RUN_ID) 선택
+# 미러 결과 디렉터리(MIRROR_TARGET) 선택
 # =============================================================================
-select_run() {
-    local arg_run_id="$1"
+select_mirror_target() {
+    local arg_name="$1"
 
-    # CLI 인자로 RUN_ID 가 지정된 경우 바로 사용
-    if [[ -n "${arg_run_id}" ]]; then
-        local dir="${ADD_OPERATORS_MIRROR_DIR}/${arg_run_id}"
+    # CLI 인자로 디렉터리 이름이 지정된 경우 바로 사용
+    if [[ -n "${arg_name}" ]]; then
+        local dir="${ADD_OPERATORS_MIRROR_DIR}/${arg_name}"
         if [[ ! -d "${dir}" ]]; then
-            echo "[ERROR] 지정한 RUN_ID 디렉토리가 없습니다: ${dir}"
+            echo "[ERROR] 지정한 미러 디렉터리가 없습니다: ${dir}"
             exit 1
         fi
-        RUN_ID="${arg_run_id}"
+        MIRROR_TARGET="${arg_name}"
         RUN_DIR="${dir}"
-        echo "[INFO] RUN_ID 지정됨: ${RUN_ID}"
+        echo "[INFO] MIRROR_TARGET 지정됨: ${MIRROR_TARGET}"
         return
     fi
 
-    # 실행 디렉토리: ADD_OPERATORS_TARGET 이름 등, mirror-added/ 바로 아래의 모든 하위 디렉터리
-    local -a runs=()
+    # ADD_OPERATORS_MIRROR_DIR 직하위의 모든 하위 디렉터리 (이름은 보통 ADD_OPERATORS_TARGET 과 동일)
+    local -a targets=()
     local name
     if [[ -d "${ADD_OPERATORS_MIRROR_DIR}" ]]; then
         while IFS= read -r -d '' d; do
             name="$(basename "${d}")"
-            runs+=("${name}")
+            targets+=("${name}")
         done < <(find "${ADD_OPERATORS_MIRROR_DIR}" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
-        if [[ ${#runs[@]} -gt 0 ]]; then
-            readarray -t runs < <(printf '%s\n' "${runs[@]}" | sort -r)
+        if [[ ${#targets[@]} -gt 0 ]]; then
+            readarray -t targets < <(printf '%s\n' "${targets[@]}" | sort -r)
         fi
     fi
 
-    if [[ ${#runs[@]} -eq 0 ]]; then
-        echo "[ERROR] 업로드할 실행 디렉토리가 없습니다: ${ADD_OPERATORS_MIRROR_DIR}"
+    if [[ ${#targets[@]} -eq 0 ]]; then
+        echo "[ERROR] 업로드할 디렉터리가 없습니다: ${ADD_OPERATORS_MIRROR_DIR}"
         echo "        02_mirror_add_operators.sh 를 먼저 실행하세요."
         exit 1
     fi
 
     echo "" >&2
     echo "=================================================================" >&2
-    echo " 업로드할 실행(RUN_ID) 선택" >&2
+    echo " 업로드할 디렉터리(MIRROR_TARGET) 선택" >&2
     echo "=================================================================" >&2
     echo "" >&2
 
     local idx=1
-    for r in "${runs[@]}"; do
+    for r in "${targets[@]}"; do
         printf "  %d) %s\n" "${idx}" "${r}" >&2
         (( idx++ ))
     done
@@ -214,14 +216,14 @@ select_run() {
     read -r choice
 
     if [[ "${choice}" -ge 1 && "${choice}" -le $(( idx - 1 )) ]]; then
-        RUN_ID="${runs[$(( choice - 1 ))]}"
-        RUN_DIR="${ADD_OPERATORS_MIRROR_DIR}/${RUN_ID}"
+        MIRROR_TARGET="${targets[$(( choice - 1 ))]}"
+        RUN_DIR="${ADD_OPERATORS_MIRROR_DIR}/${MIRROR_TARGET}"
     else
         echo "[ERROR] 잘못된 선택입니다: ${choice}" >&2
         exit 1
     fi
 
-    echo "[INFO] 선택된 RUN_ID: ${RUN_ID}" >&2
+    echo "[INFO] 선택된 MIRROR_TARGET: ${MIRROR_TARGET}" >&2
 }
 
 # =============================================================================
@@ -231,8 +233,8 @@ run_upload() {
     local target="$1"
     local isc_dir="${RUN_DIR}/${target}"
     local isc_file="${isc_dir}/${ISC_FILES[${target}]}"
-    local cache_dir="${ADD_OPERATORS_CACHE_DIR}/${RUN_ID}/${target}"
-    local dest_registry="docker://${MIRROR_REGISTRY}/${RUN_ID}/${target}"
+    local cache_dir="${ADD_OPERATORS_CACHE_DIR}/${MIRROR_TARGET}/${target}"
+    local dest_registry="docker://${MIRROR_REGISTRY}/${MIRROR_TARGET}/${target}"
 
     echo ""
     echo "================================================================="
@@ -294,7 +296,7 @@ select_target() {
 
     echo "" >&2
     echo "=================================================================" >&2
-    echo " 업로드 대상 선택 (RUN_ID: ${RUN_ID})" >&2
+    echo " 업로드 대상 선택 (MIRROR_TARGET: ${MIRROR_TARGET})" >&2
     echo "=================================================================" >&2
     echo "" >&2
 
@@ -323,22 +325,22 @@ select_target() {
 # main
 # =============================================================================
 main() {
-    local arg_run_id="${1:-}"
+    local arg_mirror_target="${1:-}"
 
     echo ""
     echo "================================================================="
     echo " 추가 Operator 이미지 업로드 (disk → registry)"
     echo "  ADD_OPERATORS_MIRROR_DIR : ${ADD_OPERATORS_MIRROR_DIR}"
-    echo "  ADD_OPERATORS_CACHE_DIR  : ${ADD_OPERATORS_CACHE_DIR}/<RUN_ID>/<target>"
-    echo "  DEST                     : docker://${MIRROR_REGISTRY}/<RUN_ID>/<target>"
+    echo "  ADD_OPERATORS_CACHE_DIR  : ${ADD_OPERATORS_CACHE_DIR}/<MIRROR_TARGET>/<catalog>"
+    echo "  DEST                     : docker://${MIRROR_REGISTRY}/<MIRROR_TARGET>/<catalog>"
     echo "================================================================="
 
     configure_registry
 
     check_prerequisites
 
-    # RUN_ID 선택 (인자 있으면 직접 지정, 없으면 목록에서 선택)
-    select_run "${arg_run_id}"
+    # MIRROR_TARGET 선택 (인자 있으면 직접 지정, 없으면 목록에서 선택)
+    select_mirror_target "${arg_mirror_target}"
 
     echo "[INFO] RUN_DIR : ${RUN_DIR}"
 
@@ -363,9 +365,9 @@ main() {
     echo ""
     echo "================================================================="
     if [[ ${failed} -eq 0 ]]; then
-        echo "[DONE] 업로드 완료. (RUN_ID: ${RUN_ID})"
+        echo "[DONE] 업로드 완료. (MIRROR_TARGET: ${MIRROR_TARGET})"
     else
-        echo "[WARN] 업로드 완료 (실패: ${failed}건). (RUN_ID: ${RUN_ID})"
+        echo "[WARN] 업로드 완료 (실패: ${failed}건). (MIRROR_TARGET: ${MIRROR_TARGET})"
     fi
     echo "================================================================="
 }
