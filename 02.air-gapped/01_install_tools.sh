@@ -98,10 +98,15 @@ install_ocp_tools() {
         run tar -xzf "${src}" -C "${tmp_dir}"
     done
 
+    # tar에서 실행 비트가 없는 경우(예: oc-mirror)도 설치되도록 모두 chmod +x
+    find "${tmp_dir}" -maxdepth 1 -type f -exec chmod +x {} +
+
     echo "[INST] /usr/local/bin/ 에 실행 파일 설치 중..."
     find "${tmp_dir}" -maxdepth 1 -type f -executable | while read -r bin; do
         local bin_name
         bin_name=$(basename "${bin}")
+        # opm-rhel9 → opm (표준 명령어 이름으로 설치)
+        [[ "${bin_name}" == "opm-rhel9" ]] && bin_name="opm"
         run install -m 755 "${bin}" "/usr/local/bin/${bin_name}"
         echo "[INST] /usr/local/bin/${bin_name}"
     done
