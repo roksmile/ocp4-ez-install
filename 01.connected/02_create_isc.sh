@@ -49,6 +49,25 @@ init_render_cache() {
     trap "rm -rf '${RENDER_CACHE_DIR}'" EXIT
 }
 
+# registry.redhat.io 로그인 여부 확인 (미로그인 시 안내 후 종료)
+check_rh_registry_auth() {
+    local registry="registry.redhat.io"
+
+    echo "[INFO] ${registry} 로그인 상태 확인 중..."
+    if podman login --get-login "${registry}" &>/dev/null; then
+        echo "[OK]   ${registry} 로그인 확인됨"
+        return
+    fi
+
+    echo ""
+    echo "[ERROR] ${registry} 에 로그인되어 있지 않습니다."
+    echo "[ERROR] 아래 명령어로 먼저 로그인 후 다시 실행하세요:"
+    echo ""
+    echo "  podman login registry.redhat.io"
+    echo ""
+    exit 1
+}
+
 # 카탈로그 URL → 안전한 파일명
 _catalog_cache_file() {
     local catalog_url="$1"
@@ -57,22 +76,32 @@ _catalog_cache_file() {
     echo "${RENDER_CACHE_DIR}/${safe_name}.json"
 }
 
-# 카탈로그 렌더 (캐시 있으면 스킵)
+# 카탈로그 렌더 (캐시 있으면 스킵, 실패도 캐시하여 재시도 방지)
 _render_catalog() {
     local catalog_url="$1"
     local cache_file
     cache_file=$(_catalog_cache_file "${catalog_url}")
+    local fail_file="${cache_file}.failed"
 
-    if [[ -f "${cache_file}" ]]; then
+    # 성공 캐시 또는 실패 캐시가 이미 있으면 스킵
+    if [[ -f "${cache_file}" || -f "${fail_file}" ]]; then
         return
     fi
 
     echo "[INFO] 카탈로그 렌더링 중 (시간이 걸릴 수 있습니다): ${catalog_url}" >&2
     echo "[CMD]  opm render ${catalog_url} -o json" >&2
-    if ! opm render "${catalog_url}" -o json > "${cache_file}" 2>/dev/null; then
-        echo "[WARN] opm render 실패: ${catalog_url} - defaultChannel 을 'stable' 로 대체합니다." >&2
+
+    local err_file
+    err_file=$(mktemp)
+    if ! opm render "${catalog_url}" -o json > "${cache_file}" 2>"${err_file}"; then
+        echo "[WARN] opm render 실패: ${catalog_url}" >&2
+        echo "[WARN] 오류 내용:" >&2
+        cat "${err_file}" >&2
+        echo "[WARN] defaultChannel 은 'stable', version 은 생략합니다." >&2
         rm -f "${cache_file}"
+        touch "${fail_file}"
     fi
+    rm -f "${err_file}"
 }
 
 # defaultChannel 조회 (실패 시 "stable" 반환)
@@ -100,6 +129,51 @@ get_default_channel() {
     else
         echo "${ch}"
     fi
+}
+
+# 채널 최신 버전 조회 (채널 head 번들의 olm.package 버전)
+get_latest_version() {
+    local catalog_url="$1"
+    local pkg_name="$2"
+    local channel_name="$3"
+    local cache_file
+    cache_file=$(_catalog_cache_file "${catalog_url}")
+
+    _render_catalog "${catalog_url}"
+
+    if [[ ! -f "${cache_file}" ]]; then
+        echo ""
+        return
+    fi
+
+    # 캐시 파일이 비어있으면(렌더 성공했으나 패키지 없는 경우) 빈 값 반환
+    if [[ ! -s "${cache_file}" ]]; then
+        echo ""
+        return
+    fi
+
+    # 채널 entries 중 다른 entry 의 replaces 에 없는 번들 = head
+    local head_bundle
+    head_bundle=$(jq -r --arg pkg "${pkg_name}" --arg ch "${channel_name}" '
+        select(.schema == "olm.channel" and .package == $pkg and .name == $ch) |
+        .entries as $entries |
+        ([ $entries[].replaces | select(. != null) ]) as $replaced |
+        first( $entries[] | .name as $n | select( ($replaced | index($n)) == null ) | .name )
+    ' "${cache_file}" 2>/dev/null | head -1)
+
+    if [[ -z "${head_bundle}" ]]; then
+        echo ""
+        return
+    fi
+
+    # head 번들의 olm.package property 에서 버전 추출
+    local version
+    version=$(jq -r --arg bn "${head_bundle}" '
+        select(.schema == "olm.bundle" and .name == $bn) |
+        ( .properties // [] )[] | select(.type == "olm.package") | .value.version
+    ' "${cache_file}" 2>/dev/null | head -1)
+
+    echo "${version:-}"
 }
 
 # =============================================================================
@@ -193,13 +267,18 @@ _write_olm_isc() {
         echo "  - catalog: ${catalog_url}"
         echo "    packages:"
         for pkg in "${packages[@]}"; do
-            local ch
+            local ch ver
             ch=$(get_default_channel "${catalog_url}" "${pkg}")
-            echo "[INFO] ${pkg} defaultChannel: ${ch}" >&2
+            ver=$(get_latest_version "${catalog_url}" "${pkg}" "${ch}")
+            echo "[INFO] ${pkg} defaultChannel: ${ch}, latestVersion: ${ver:-N/A}" >&2
             echo "    - name: ${pkg}"
             echo "      defaultChannel: ${ch}"
             echo "      channels:"
             echo "      - name: ${ch}"
+            if [[ -n "${ver}" ]]; then
+                echo "        minVersion: ${ver}"
+                echo "        maxVersion: ${ver}"
+            fi
         done
     } > "${isc_dir}/${file_name}"
 
@@ -318,8 +397,9 @@ main() {
     # mirror 하위 디렉토리 초기화
     cleanup_mirror_dirs
 
-    # opm render 캐시 초기화
+    # opm render 캐시 초기화 및 registry.redhat.io 로그인 확인
     init_render_cache
+    check_rh_registry_auth
 
     # Operator 선택
     select_operators_interactive

@@ -15,26 +15,26 @@ There is no build system. Scripts are executed directly in sequence:
 
 ```bash
 # Phase 1 — Connected environment (internet access required)
-sudo bash connected/01_download_ocp_tools.sh    # Install OCP CLI tools to /usr/local/bin
-bash connected/02_create_isc.sh                 # Generate ImageSetConfiguration YAMLs (interactive)
-bash connected/03_mirror_images.sh              # Mirror container images via oc-mirror (interactive)
+sudo bash 01.connected/01_download_ocp_tools.sh    # Install OCP CLI tools to /usr/local/bin
+bash 01.connected/02_create_isc.sh                 # Generate ImageSetConfiguration YAMLs (interactive)
+bash 01.connected/03_mirror_images.sh              # Mirror container images via oc-mirror (interactive)
 # Transfer downloads/ and mirror/ to air-gapped host
 
 # Phase 2 — Air-gapped environment
-sudo bash air-gapped/01_install_tools.sh        # Install tools from downloads/
-bash air-gapped/02_create_certs.sh             # Generate CA + TLS certs for registry
-sudo bash air-gapped/03_create_registry.sh     # Deploy Podman-based mirror registry
-bash air-gapped/04_upload_mirror.sh            # Push mirrored images to registry
-bash air-gapped/05_create_install_config.sh    # Generate install-config.yaml
-bash air-gapped/06_create_agent_config.sh      # Generate agent-config.yaml (NMState networking)
-bash air-gapped/07_create_config_yaml.sh       # Generate cluster manifests (CatalogSource, IDMS)
-bash air-gapped/08_create_cluster_manifests.sh # Run openshift-install to produce final manifests
-bash air-gapped/09_create_agent_iso.sh         # Create bootable Agent ISO
-bash air-gapped/10_monitor_install.sh          # Monitor install after booting nodes from ISO
+sudo bash 02.air-gapped/01_install_tools.sh        # Install tools from downloads/
+bash 02.air-gapped/02_create_certs.sh             # Generate CA + TLS certs for registry
+sudo bash 02.air-gapped/03_create_registry.sh     # Deploy Podman-based mirror registry
+bash 02.air-gapped/04_upload_mirror.sh            # Push mirrored images to registry
+bash 02.air-gapped/05_create_install_config.sh    # Generate install-config.yaml
+bash 02.air-gapped/06_create_agent_config.sh      # Generate agent-config.yaml (NMState networking)
+bash 02.air-gapped/07_create_config_yaml.sh       # Generate cluster manifests (CatalogSource, IDMS)
+bash 02.air-gapped/08_create_cluster_manifests.sh # Run openshift-install to produce final manifests
+bash 02.air-gapped/09_create_agent_iso.sh         # Create bootable Agent ISO
+bash 02.air-gapped/10_monitor_install.sh          # Monitor install after booting nodes from ISO
 
 # Optional post-install
-bash add-nodes/...        # Add worker nodes to existing cluster
-bash add-operators/...    # Install additional operators (elasticsearch, amq-streams, etc.)
+bash 03.add-nodes/...        # Add worker nodes to existing cluster
+bash 04.add-operators/...    # Install additional operators (elasticsearch, amq-streams, etc.)
 ```
 
 Scripts requiring root (`sudo`) are those that install system binaries or manage Podman system services.
