@@ -121,6 +121,7 @@ run_mirror() {
         --config "${isc_file}" \
         --cache-dir "${cache_dir}" \
         --authfile "${PULL_SECRET_FILE}" \
+        --remove-signatures \
         "file://${isc_dir}"
 
     local rc=$?
