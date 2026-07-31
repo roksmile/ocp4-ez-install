@@ -93,60 +93,22 @@ load_pull_secret() {
 }
 
 # -----------------------------------------------------------------------------
-# Mirror Registry CA 인증서 선택 (additionalTrustBundle)
-# 02_create_certs.sh 가 생성한 ${CERTS_DIR}/{domain}/root_ca/ca.crt 중 선택
+# Mirror Registry CA 인증서 로드 (additionalTrustBundle)
+# 02_create_certs.sh 가 생성한 ${CERTS_DIR}/ca.crt 사용
 # -----------------------------------------------------------------------------
 load_ca_cert() {
     CA_CERT=""
+    local ca_file="${CERTS_DIR}/ca.crt"
 
-    # CERTS_DIR 하위의 CA 인증서 목록 스캔
-    local ca_list=()
-    if [[ -d "${CERTS_DIR}" ]]; then
-        while IFS= read -r -d '' ca_file; do
-            ca_list+=("${ca_file}")
-        done < <(find "${CERTS_DIR}" -mindepth 3 -maxdepth 3 \
-                      -path "*/root_ca/ca.crt" -print0 2>/dev/null | sort -z)
-    fi
-
-    if [[ "${#ca_list[@]}" -eq 0 ]]; then
-        echo "[WARN] ${CERTS_DIR} 에 CA 인증서가 없습니다."
+    if [[ ! -f "${ca_file}" ]]; then
+        echo "[WARN] CA 인증서를 찾을 수 없습니다: ${ca_file}"
         echo "       additionalTrustBundle 섹션은 생략됩니다."
         echo "       air-gap 환경에서는 02_create_certs.sh 를 먼저 실행하세요."
         return 0
     fi
 
-    echo ""
-    echo "  사용 가능한 CA 인증서 목록:"
-    local idx=1
-    for ca_file in "${ca_list[@]}"; do
-        local domain
-        domain=$(basename "$(dirname "$(dirname "${ca_file}")")")
-        printf "    %d) [%s]  %s\n" "${idx}" "${domain}" "${ca_file}"
-        idx=$(( idx + 1 ))
-    done
-    echo "    s) 건너뛰기 (additionalTrustBundle 생략)"
-    echo ""
-
-    local selected_ca=""
-    while true; do
-        read -rp "  CA 인증서를 선택하세요 [1]: " input
-        input="${input:-1}"
-
-        if [[ "${input}" == "s" || "${input}" == "S" ]]; then
-            echo "[INFO] additionalTrustBundle 생략합니다."
-            return 0
-        fi
-
-        if [[ "${input}" =~ ^[0-9]+$ ]] && \
-           (( input >= 1 && input <= ${#ca_list[@]} )); then
-            selected_ca="${ca_list[$(( input - 1 ))]}"
-            break
-        fi
-        echo "  [WARN] 올바른 번호를 입력하세요."
-    done
-
-    CA_CERT=$(cat "${selected_ca}")
-    echo "[INFO] CA 인증서 로드: ${selected_ca}"
+    CA_CERT=$(cat "${ca_file}")
+    echo "[INFO] CA 인증서 로드: ${ca_file}"
 }
 
 # -----------------------------------------------------------------------------
