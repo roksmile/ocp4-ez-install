@@ -116,12 +116,18 @@ run_mirror() {
     # cache 디렉토리 생성
     mkdir -p "${cache_dir}"
 
+    # Certified Operator 는 서명 제거 옵션을 true 로 설정
+    local remove_signatures="false"
+    if [[ "${target}" == "olm-certified" ]]; then
+        remove_signatures="true"
+    fi
+
     run oc-mirror \
         --v2 \
         --config "${isc_file}" \
         --cache-dir "${cache_dir}" \
         --authfile "${PULL_SECRET_FILE}" \
-        --remove-signatures=false \
+        --remove-signatures="${remove_signatures}" \
         "file://${isc_dir}"
 
     local rc=$?
